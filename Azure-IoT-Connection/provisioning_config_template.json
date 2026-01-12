@@ -1,0 +1,12 @@
+{
+  "globalEndpoint": "global.azure-devices-provisioning.net",
+  "idScope": "YOUR_ID_SCOPE_HERE",
+  "registrationId": "YOUR_REGISTRATION_ID_HERE",
+  "symmetricKey": "YOUR_PRIMARY_KEY_HERE",
+  "tag": {
+    "nexusLocate": {
+      "siteName": "YOUR_SITE_NAME_HERE",
+      "truckNumber": "YOUR_TRUCK_NUMBER_HERE"
+    }
+  }
+}

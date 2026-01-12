@@ -1,0 +1,9 @@
+<RCC>
+  <qresource prefix="img">
+    <file>img/gear-48.png</file>
+    <file>img/home.png</file>
+    <file>img/background.png</file>
+    <file>img/icon.ico</file>
+    <file>img/checkmark.png</file>
+  </qresource>
+</RCC>

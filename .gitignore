@@ -1,0 +1,10 @@
+venv
+.python-version
+env.json
+.idea
+__pycache__
+*.log
+*.dump
+dist/
+build/
+*.deb

@@ -1,0 +1,13 @@
+PySide6
+PyInstaller
+requests
+urllib3
+pyserial
+geopy
+geographiclib
+pynmea2
+sllurp
+schedule
+ping3
+numpy
+psutil
