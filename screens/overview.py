@@ -1,5 +1,5 @@
 from PySide6.QtCore import Qt, QTimer, QThread, Signal
-from PySide6.QtWidgets import QTableWidgetItem
+from PySide6.QtWidgets import QTableWidgetItem, QLabel
 
 from screens.base import BaseScreen
 from ui.screens.ui_overview import Ui_OverviewScreen
@@ -16,6 +16,7 @@ import time
 import subprocess
 import platform
 from ping3 import ping
+from utils_Test.internet_status import detect_active_tunnels
 
 
 class GPSScannerThread(QThread):
@@ -124,7 +125,13 @@ class OverviewScreen(BaseScreen):
         self.rfid.start()
         
         # Initialize spinner for arp-scan
-        self.arp_scan_spinner = QtWaitingSpinner(self, center_on_parent=True, disable_parent_when_spinning=False)
+        self.arp_scan_spinner = QtWaitingSpinner(self.ui.tableWidget, center_on_parent=True, disable_parent_when_spinning=False)
+        
+        # Initialize label for waiting message
+        self.waiting_label = QLabel("Waiting for RFID Reader to connect...", self.ui.tableWidget)
+        self.waiting_label.setStyleSheet("color: #00ff00; font-size: 14px; font-weight: bold; background-color: transparent;")
+        self.waiting_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.waiting_label.hide()
 
         # Schedulers
         self.health_timer = QTimer(self)
@@ -146,6 +153,10 @@ class OverviewScreen(BaseScreen):
         self.internet_timer.start(5000)  # Check every 5 seconds
         self._check_internet_status()  # Initial check
         
+        # Initialize internet tunnel status
+        self.ui.internet_tunnel.setText("N/A")
+        self._update_internet_tunnel_status()  # Initial check
+        
         # Internet disconnection tracking
         self.internet_disconnected_start = None
         self.internet_limit_seconds = settings.INTERNET_LIMIT_TIME * 60  # Convert minutes to seconds
@@ -156,23 +167,96 @@ class OverviewScreen(BaseScreen):
         self._start_config_reload_timer()
 
     def on_leave(self):
-        if self.gps and self.gps.isRunning():
-            self.gps.stop()
-        if self.rfid and self.rfid.isRunning():
-            self.rfid.stop()
-        if self.gps_scanner and self.gps_scanner.isRunning():
-            self.gps_scanner.stop()
-        if hasattr(self, 'gps_display_timer'):
-            self.gps_display_timer.stop()
-        if hasattr(self, 'internet_timer'):
-            self.internet_timer.stop()
-        if hasattr(self, 'gps_timeout_timer'):
-            self.gps_timeout_timer.stop()
-        if hasattr(self, 'config_reload_timer'):
-            self.config_reload_timer.stop()
+        logger.info("Leaving overview screen - stopping all threads and timers immediately")
+        
+        # Disconnect all signal connections first to prevent callbacks from firing
+        try:
+            if hasattr(self, 'rfid') and self.rfid:
+                self.rfid.sig_msg.disconnect()
+                self.rfid.sig_arp_scan_status.disconnect()
+        except Exception as e:
+            logger.debug(f"Error disconnecting RFID signals: {e}")
+        
+        try:
+            if hasattr(self, 'gps') and self.gps:
+                self.gps.sig_msg.disconnect()
+        except Exception as e:
+            logger.debug(f"Error disconnecting GPS signals: {e}")
+        
+        try:
+            if hasattr(self, 'gps_scanner') and self.gps_scanner:
+                self.gps_scanner.gps_found.disconnect()
+                self.gps_scanner.gps_not_found.disconnect()
+        except Exception as e:
+            logger.debug(f"Error disconnecting GPS scanner signals: {e}")
+        
+        # Stop all timers unconditionally (stop even if not active to ensure clean state)
+        timers_to_stop = [
+            'health_timer', 'upload_timer', 'gps_display_timer', 
+            'internet_timer', 'gps_timeout_timer', 'external_retry_timer', 
+            'config_reload_timer'
+        ]
+        for timer_name in timers_to_stop:
+            if hasattr(self, timer_name):
+                timer = getattr(self, timer_name)
+                if timer and timer.isActive():
+                    timer.stop()
+                    logger.debug(f"Stopped {timer_name}")
+        
+        # Stop all threads immediately
+        if hasattr(self, 'rfid') and self.rfid:
+            if self.rfid.isRunning():
+                logger.info("Stopping RFID thread immediately")
+                self.rfid.stop()
+            else:
+                # Even if not running, ensure stop flag is set
+                try:
+                    self.rfid._b_stop.set()
+                except Exception:
+                    pass
+        
+        if hasattr(self, 'gps') and self.gps:
+            if self.gps.isRunning():
+                logger.info("Stopping GPS thread immediately")
+                self.gps.stop()
+            else:
+                # Even if not running, ensure stop flag is set
+                try:
+                    self.gps._b_stop.set()
+                except Exception:
+                    pass
+        
+        if hasattr(self, 'gps_scanner') and self.gps_scanner:
+            if self.gps_scanner.isRunning():
+                logger.info("Stopping GPS scanner thread immediately")
+                self.gps_scanner.stop()
+            else:
+                # Even if not running, ensure stop flag is set
+                try:
+                    self.gps_scanner._stop_requested = True
+                except Exception:
+                    pass
+        
+        # Stop UI elements
         if hasattr(self, 'arp_scan_spinner'):
-            self.arp_scan_spinner.stop()
-        self.storage.close()
+            try:
+                self.arp_scan_spinner.stop()
+            except Exception:
+                pass
+        if hasattr(self, 'waiting_label'):
+            try:
+                self.waiting_label.hide()
+            except Exception:
+                pass
+        
+        # Close storage
+        if hasattr(self, 'storage'):
+            try:
+                self.storage.close()
+            except Exception as e:
+                logger.debug(f"Error closing storage: {e}")
+        
+        logger.info("All threads and timers stopped successfully")
 
     def _set_gps_status(self, text, ok):
         self.ui.gps_connection_status.setStyleSheet("""color: #00ff00;""" if ok else """color: #ff0000;""")
@@ -181,6 +265,27 @@ class OverviewScreen(BaseScreen):
     def _set_internet_status(self, text, ok):
         self.ui.internet_status.setStyleSheet("""color: #00ff00;""" if ok else """color: #ff0000;""")
         self.ui.internet_status.setText(text)
+    
+    def _update_internet_tunnel_status(self):
+        """Update internet tunnel status display"""
+        try:
+            tunnels = detect_active_tunnels()
+            if not tunnels:
+                tunnel_text = "Nothing"
+            else:
+                tunnel_text = " and ".join(sorted(tunnels))
+            self.ui.internet_tunnel.setText(tunnel_text)
+        except subprocess.TimeoutExpired:
+            # Ping timeout - interface likely doesn't have internet
+            logger.debug("Internet tunnel detection timed out")
+            # Keep current value or set to "N/A" if not set
+            if not self.ui.internet_tunnel.text() or self.ui.internet_tunnel.text() == "":
+                self.ui.internet_tunnel.setText("N/A")
+        except Exception as e:
+            logger.debug(f"Error detecting internet tunnels: {e}")
+            # Keep current value or set to "N/A" if not set
+            if not self.ui.internet_tunnel.text() or self.ui.internet_tunnel.text() == "":
+                self.ui.internet_tunnel.setText("N/A")
 
     def _on_gps_status(self, status):
         # Called by external GPS worker
@@ -202,10 +307,31 @@ class OverviewScreen(BaseScreen):
         """Handle arp-scan status changes - show/hide spinner"""
         if is_scanning:
             self.arp_scan_spinner.start()
+            self._update_waiting_label_position()
+            self.waiting_label.show()
             logger.debug("ARP-scan started - showing spinner")
         else:
             self.arp_scan_spinner.stop()
+            self.waiting_label.hide()
             logger.debug("ARP-scan completed - hiding spinner")
+    
+    def _update_waiting_label_position(self):
+        """Update the position of the waiting label to be below the spinner"""
+        if self.ui.tableWidget:
+            # Get table widget center in local coordinates
+            table_rect = self.ui.tableWidget.rect()
+            center_x = table_rect.center().x()
+            center_y = table_rect.center().y()
+            
+            # Spinner size is approximately 60x60 (innerRadius + lineLength) * 2
+            spinner_size = 60
+            # Position label below the spinner, centered horizontally
+            label_width = 300
+            label_height = 30
+            label_x = center_x - label_width // 2
+            label_y = center_y + spinner_size // 2 + 20  # Below spinner with spacing
+            self.waiting_label.move(label_x, label_y)
+            self.waiting_label.resize(label_width, label_height)
 
     def _on_rfid_status(self, status):
         # logger.debug(f"RFID status received: {status}")
@@ -236,10 +362,9 @@ class OverviewScreen(BaseScreen):
             storage_flag = True
             
             # Filter records for storage based on GPS data and filter settings
-            # Skip storage if GPS data is invalid (lat=0, lon=0, speed=0)
-            if (lat == 0 and lon == 0) or speed == 0:
+            if lat == 0 and lon == 0:
                 storage_flag = False
-                # logger.debug(f"Tag detected but no GPS data: TAG {tag['EPC-96']} ant={tag['AntennaID']} rssi={tag['PeakRSSI']} (lat=0, lon=0, speed=0)")
+                # logger.debug(f"Tag detected but no GPS data: TAG {tag['EPC-96']} ant={tag['AntennaID']} rssi={tag['PeakRSSI']} (lat=0, lon=0)")
             
             # Apply filters from settings for storage
             if storage_flag:
@@ -248,7 +373,7 @@ class OverviewScreen(BaseScreen):
                     min_s = sp.get('min')
                     max_s = sp.get('max')
                     if min_s is not None and max_s is not None and (speed < min_s or speed > max_s):
-                        logger.debug(f"Skipping storage: speed {speed} is not in range {min_s} to {max_s}")
+                        # logger.debug(f"Skipping storage: speed {speed} is not in range {min_s} to {max_s}")
                         storage_flag = False
 
             if storage_flag:
@@ -257,7 +382,7 @@ class OverviewScreen(BaseScreen):
                     min_r = rs.get('min')
                     max_r = rs.get('max')
                     if min_r is not None and max_r is not None and (tag['PeakRSSI'] < min_r or tag['PeakRSSI'] > max_r):
-                        logger.debug(f"Skipping storage: RSSI {tag['PeakRSSI']} is not in range {min_r} to {max_r}")
+                        # logger.debug(f"Skipping storage: RSSI {tag['PeakRSSI']} is not in range {min_r} to {max_r}")
                         storage_flag = False
 
             if storage_flag:
@@ -268,7 +393,7 @@ class OverviewScreen(BaseScreen):
                     try:
                         epc = int(tag['EPC-96'])
                         if min_t is not None and max_t is not None and (epc < min_t or epc > max_t):
-                            logger.debug(f"Skipping storage: EPC {epc} is not in range {min_t} to {max_t}")
+                            # logger.debug(f"Skipping storage: EPC {epc} is not in range {min_t} to {max_t}")
                             storage_flag = False
                     except Exception:
                         logger.debug(f"Skipping storage: EPC {tag['EPC-96']} is not an integer")
@@ -461,6 +586,9 @@ class OverviewScreen(BaseScreen):
             self._set_internet_status("Disconnected", False)
             logger.debug(f"Internet ping error: {e}")
             self._handle_internet_disconnection()
+        
+        # Update tunnel status
+        self._update_internet_tunnel_status()
 
     def _handle_internet_disconnection(self):
         """Handle internet disconnection and check if restart is needed"""
@@ -565,7 +693,7 @@ class OverviewScreen(BaseScreen):
             longitude = row[5] if row[5] else 0  
             speed = int(row[6]) if row[6] else 0
             
-            if latitude == 0 and longitude == 0 and speed == 0:
+            if latitude == 0 and longitude == 0:
                 continue  # Skip this record
             
             valid_records.append(row)

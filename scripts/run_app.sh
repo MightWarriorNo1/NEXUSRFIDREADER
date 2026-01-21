@@ -9,7 +9,9 @@ sudo dhclient usb0 2>&1 || true
 # Resolve project root as the parent of this script directory
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
-HOME_DIR="$(cd -- "${PROJECT_ROOT}/.." && pwd)"
+# Get the actual user's home directory (not derived from project path)
+SERVICE_USER="${SUDO_USER:-$(whoami)}"
+HOME_DIR="$(eval echo ~${SERVICE_USER})"
 cd "${PROJECT_ROOT}"
 
 # Prefer project venv if present

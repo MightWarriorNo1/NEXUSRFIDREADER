@@ -10,3 +10,4 @@ sllurp
 schedule
 ping3
 numpy
+psutil

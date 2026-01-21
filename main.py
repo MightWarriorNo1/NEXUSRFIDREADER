@@ -31,10 +31,10 @@ class RFIDReaderApp(QMainWindow):
         super().__init__()
         self.ui = Ui_Main()
         self.ui.setupUi(self)
-        # for k in {"overview"}:
-        #     getattr(self.ui, f"btn_{k}").released.connect(
-        #         partial(self.switch_screen, k)
-        #     )
+        for k in {"overview", "settings"}:
+            getattr(self.ui, f"btn_{k}").released.connect(
+                partial(self.switch_screen, k)
+            )
         self.switch_screen(INIT_SCREEN)
     
     def switch_screen(self, screen_name, **kwargs):
@@ -54,13 +54,13 @@ class RFIDReaderApp(QMainWindow):
         else:
             logger.error(f"Failed to create {screen_name} screen")
             
-        # for k in screens.keys():
-        #     sh = (
-        #         "color:#FFFFFF;background-color:#262626;border-top-right-radius:5px;border-top-left-radius:5px;padding-left:10px"
-        #         if (k == self._cur_screen_name and k != "settings")
-        #         else "color:#FFFFFF;border:none;"
-        #     )
-        #     getattr(self.ui, f"btn_{k}").setStyleSheet(sh)
+        for k in screens.keys():
+            sh = (
+                "color:#FFFFFF;background-color:#595959;border-top-right-radius:5px;border-top-left-radius:5px;padding-left:10px"
+                if k == self._cur_screen_name
+                else "color:#FFFFFF;border:none;"
+            )
+            getattr(self.ui, f"btn_{k}").setStyleSheet(sh)
         logger.info(f"Switched to {screen_name} screen")
 
 if __name__ == "__main__":

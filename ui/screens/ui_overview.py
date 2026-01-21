@@ -24,8 +24,8 @@ class Ui_OverviewScreen(object):
     def setupUi(self, OverviewScreen):
         if not OverviewScreen.objectName():
             OverviewScreen.setObjectName(u"OverviewScreen")
-        OverviewScreen.resize(800, 480)
-        OverviewScreen.setMinimumSize(QSize(790, 420))
+        OverviewScreen.resize(800, 500)
+        OverviewScreen.setMinimumSize(QSize(790, 500))
         OverviewScreen.setStyleSheet(u"")
         self.verticalLayout_20 = QVBoxLayout(OverviewScreen)
         self.verticalLayout_20.setSpacing(0)
@@ -465,6 +465,30 @@ class Ui_OverviewScreen(object):
 
         self.verticalLayout_5.addWidget(self.widget_14)
 
+        self.widget_15 = QWidget(self.widget_12)
+        self.widget_15.setObjectName(u"widget_15")
+        self.horizontalLayout_14 = QHBoxLayout(self.widget_15)
+        self.horizontalLayout_14.setSpacing(4)
+        self.horizontalLayout_14.setObjectName(u"horizontalLayout_14")
+        self.horizontalLayout_14.setContentsMargins(0, 0, 0, 0)
+        self.label_22 = QLabel(self.widget_15)
+        self.label_22.setObjectName(u"label_22")
+        self.label_22.setFont(font3)
+        self.label_22.setStyleSheet(u"color: #ffffff;")
+        self.label_22.setAlignment(Qt.AlignmentFlag.AlignRight|Qt.AlignmentFlag.AlignTrailing|Qt.AlignmentFlag.AlignVCenter)
+
+        self.horizontalLayout_14.addWidget(self.label_22)
+
+        self.internet_tunnel = QLabel(self.widget_15)
+        self.internet_tunnel.setObjectName(u"internet_tunnel")
+        self.internet_tunnel.setFont(font4)
+        self.internet_tunnel.setStyleSheet(u"color: #ffffff;")
+
+        self.horizontalLayout_14.addWidget(self.internet_tunnel)
+
+
+        self.verticalLayout_5.addWidget(self.widget_15)
+
 
         self.horizontalLayout_2.addWidget(self.widget_12)
 
@@ -520,5 +544,7 @@ class Ui_OverviewScreen(object):
         self.label_20.setText(QCoreApplication.translate("OverviewScreen", u"Network Health", None))
         self.label_21.setText(QCoreApplication.translate("OverviewScreen", u"Internet Status: ", None))
         self.internet_status.setText(QCoreApplication.translate("OverviewScreen", u"N/A", None))
+        self.label_22.setText(QCoreApplication.translate("OverviewScreen", u"Current Connection", None))
+        self.internet_tunnel.setText(QCoreApplication.translate("OverviewScreen", u"N/A", None))
     # retranslateUi
 
