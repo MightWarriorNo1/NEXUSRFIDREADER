@@ -72,6 +72,8 @@ mkdir -p ${PACKAGE_NAME}-${PACKAGE_VERSION}/usr/share/applications
 mkdir -p ${PACKAGE_NAME}-${PACKAGE_VERSION}/usr/share/icons/hicolor/512x512/apps
 mkdir -p ${PACKAGE_NAME}-${PACKAGE_VERSION}/etc/systemd/system
 mkdir -p ${PACKAGE_NAME}-${PACKAGE_VERSION}/var/lib/nexusrfid
+mkdir -p ${PACKAGE_NAME}-${PACKAGE_VERSION}/etc/netplan
+mkdir -p ${PACKAGE_NAME}-${PACKAGE_VERSION}/etc/network/interfaces.d
 echo -e "   ${GREEN}SUCCESS${NC} Directory structure created"
 
 # Step 3: Copy files to package
@@ -108,8 +110,39 @@ WantedBy=graphical.target
 EOL
 echo -e "   ${GREEN}SUCCESS${NC} Systemd service file created (will be configured during installation)"
 
-# Step 5: Create .desktop file for application menu
-echo -e "${YELLOW}Step 5: Creating desktop application entry...${NC}"
+# Step 5: Create network configuration files for eth0
+echo -e "${YELLOW}Step 5: Creating network configuration for eth0...${NC}"
+
+# Create netplan configuration (for systems using netplan)
+cat > ${PACKAGE_NAME}-${PACKAGE_VERSION}/etc/netplan/99-nexusrfid-eth0.yaml <<'EOL'
+# Network configuration for Nexus RFID Reader eth0 interface
+# This file will be activated during package installation
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    eth0:
+      addresses:
+        - 169.254.0.1/16
+      dhcp4: false
+      dhcp6: false
+EOL
+
+# Create traditional interfaces configuration (for systems using /etc/network/interfaces)
+cat > ${PACKAGE_NAME}-${PACKAGE_VERSION}/etc/network/interfaces.d/nexusrfid-eth0 <<'EOL'
+# Network configuration for Nexus RFID Reader eth0 interface
+# Auto-configured during package installation
+auto eth0
+iface eth0 inet static
+    address 169.254.0.1
+    netmask 255.255.0.0
+    broadcast 169.254.255.255
+EOL
+
+echo -e "   ${GREEN}SUCCESS${NC} Network configuration files created"
+
+# Step 6: Create .desktop file for application menu
+echo -e "${YELLOW}Step 6: Creating desktop application entry...${NC}"
 cat > ${PACKAGE_NAME}-${PACKAGE_VERSION}/usr/share/applications/${PACKAGE_NAME}.desktop <<EOL
 [Desktop Entry]
 Version=1.0
@@ -125,8 +158,8 @@ StartupNotify=true
 EOL
 echo -e "   ${GREEN}SUCCESS${NC} Desktop entry created"
 
-# Step 6: Create control file
-echo -e "${YELLOW}Step 6: Creating package control file...${NC}"
+# Step 7: Create control file
+echo -e "${YELLOW}Step 7: Creating package control file...${NC}"
 cat > ${PACKAGE_NAME}-${PACKAGE_VERSION}/DEBIAN/control <<EOL
 Package: ${PACKAGE_NAME}
 Version: ${PACKAGE_VERSION}
@@ -153,8 +186,8 @@ Description: ${DESCRIPTION}
 EOL
 echo -e "   ${GREEN}SUCCESS${NC} Control file created"
 
-# Step 7: Create postinst script
-echo -e "${YELLOW}Step 7: Creating post-installation script...${NC}"
+# Step 8: Create postinst script
+echo -e "${YELLOW}Step 8: Creating post-installation script...${NC}"
 cat > ${PACKAGE_NAME}-${PACKAGE_VERSION}/DEBIAN/postinst <<'EOL'
 #!/bin/bash
 
@@ -285,6 +318,60 @@ if [ -d "$SERVICE_HOME" ]; then
     chown -R "${SERVICE_USER}:${SERVICE_USER}" "$SERVICE_HOME" 2>/dev/null || true
 fi
 
+# Configure eth0 network interface for RFID reader connection
+echo "Configuring eth0 network interface for RFID reader..."
+ETH0_IP="169.254.0.1"
+ETH0_NETMASK="255.255.0.0"
+ETH0_BROADCAST="169.254.255.255"
+
+# Check if eth0 interface exists
+if ip link show eth0 &>/dev/null || ifconfig eth0 &>/dev/null; then
+    echo "eth0 interface detected"
+    
+    # Configure eth0 immediately using ip command (preferred)
+    if command -v ip &>/dev/null; then
+        echo "Configuring eth0 using ip command..."
+        ip addr flush dev eth0 2>/dev/null || true
+        ip addr add ${ETH0_IP}/16 broadcast ${ETH0_BROADCAST} dev eth0 2>/dev/null || true
+        ip link set eth0 up 2>/dev/null || true
+        echo "eth0 configured with IP: ${ETH0_IP}"
+    # Fallback to ifconfig
+    elif command -v ifconfig &>/dev/null; then
+        echo "Configuring eth0 using ifconfig command..."
+        ifconfig eth0 ${ETH0_IP} netmask ${ETH0_NETMASK} broadcast ${ETH0_BROADCAST} up 2>/dev/null || true
+        echo "eth0 configured with IP: ${ETH0_IP}"
+    fi
+    
+    # Configure persistent network settings
+    # Try netplan first (Ubuntu 18.04+)
+    if [ -d "/etc/netplan" ] && [ -f "/etc/netplan/99-nexusrfid-eth0.yaml" ]; then
+        echo "Applying netplan configuration..."
+        # Validate netplan config
+        if command -v netplan &>/dev/null; then
+            netplan try --timeout 2 &>/dev/null || true
+            netplan apply 2>/dev/null || true
+            echo "Netplan configuration applied"
+        fi
+    # Fallback to traditional /etc/network/interfaces
+    elif [ -f "/etc/network/interfaces.d/nexusrfid-eth0" ]; then
+        echo "Traditional interfaces configuration found"
+        # The configuration file is already in place, just need to bring up the interface
+        if command -v ifup &>/dev/null; then
+            ifup eth0 2>/dev/null || true
+        fi
+    fi
+    
+    # Verify configuration
+    sleep 1
+    if ip addr show eth0 | grep -q "${ETH0_IP}" || ifconfig eth0 | grep -q "${ETH0_IP}"; then
+        echo "eth0 successfully configured with IP: ${ETH0_IP}"
+    else
+        echo "WARNING: eth0 configuration may not have taken effect. Please verify manually."
+    fi
+else
+    echo "WARNING: eth0 interface not found. Configuration will be applied when interface becomes available."
+fi
+
 # Update the service file with actual user information
 SERVICE_FILE="/etc/systemd/system/nexusrfid_production.service"
 if [ -f "$SERVICE_FILE" ]; then
@@ -350,8 +437,8 @@ EOL
 chmod 0755 ${PACKAGE_NAME}-${PACKAGE_VERSION}/DEBIAN/postinst
 echo -e "   ${GREEN}SUCCESS${NC} Post-installation script created"
 
-# Step 8: Create prerm script for clean removal
-echo -e "${YELLOW}Step 8: Creating pre-removal script...${NC}"
+# Step 9: Create prerm script for clean removal
+echo -e "${YELLOW}Step 9: Creating pre-removal script...${NC}"
 cat > ${PACKAGE_NAME}-${PACKAGE_VERSION}/DEBIAN/prerm <<'EOL'
 #!/bin/bash
 
@@ -380,8 +467,8 @@ EOL
 chmod 0755 ${PACKAGE_NAME}-${PACKAGE_VERSION}/DEBIAN/prerm
 echo -e "   ${GREEN}SUCCESS${NC} Pre-removal script created"
 
-# Step 9: Create postrm script for cleanup after removal
-echo -e "${YELLOW}Step 9: Creating post-removal script...${NC}"
+# Step 10: Create postrm script for cleanup after removal
+echo -e "${YELLOW}Step 10: Creating post-removal script...${NC}"
 cat > ${PACKAGE_NAME}-${PACKAGE_VERSION}/DEBIAN/postrm <<'EOL'
 #!/bin/bash
 
@@ -393,6 +480,20 @@ if [ -f "/etc/sudoers.d/nexusrfid" ]; then
     echo "Removed sudo configuration"
 fi
 
+# Clean up network configuration files
+if [ -f "/etc/netplan/99-nexusrfid-eth0.yaml" ]; then
+    rm -f /etc/netplan/99-nexusrfid-eth0.yaml
+    if command -v netplan &>/dev/null; then
+        netplan apply 2>/dev/null || true
+    fi
+    echo "Removed netplan configuration"
+fi
+
+if [ -f "/etc/network/interfaces.d/nexusrfid-eth0" ]; then
+    rm -f /etc/network/interfaces.d/nexusrfid-eth0
+    echo "Removed interfaces configuration"
+fi
+
 # Reload systemd daemon
 systemctl daemon-reload 2>/dev/null || true
 
@@ -402,13 +503,13 @@ EOL
 chmod 0755 ${PACKAGE_NAME}-${PACKAGE_VERSION}/DEBIAN/postrm
 echo -e "   ${GREEN}SUCCESS${NC} Post-removal script created"
 
-# Step 10: Build the .deb package
-echo -e "${YELLOW}Step 10: Building the .deb package...${NC}"
+# Step 11: Build the .deb package
+echo -e "${YELLOW}Step 11: Building the .deb package...${NC}"
 dpkg-deb --build ${PACKAGE_NAME}-${PACKAGE_VERSION}
 echo -e "   ${GREEN}SUCCESS${NC} Package built successfully"
 
-# Step 11: Clean up build directory
-echo -e "${YELLOW}Step 11: Cleaning up build files...${NC}"
+# Step 12: Clean up build directory
+echo -e "${YELLOW}Step 12: Cleaning up build files...${NC}"
 rm -rf ${PACKAGE_NAME}-${PACKAGE_VERSION}
 echo -e "   ${GREEN}SUCCESS${NC} Build files cleaned up"
 
@@ -442,6 +543,8 @@ echo -e "   • Systemd Service: /etc/systemd/system/nexusrfid_production.servic
 echo -e "   • Icon: /usr/share/icons/hicolor/512x512/apps/${PACKAGE_NAME}.ico"
 echo -e "   • Desktop Entry: /usr/share/applications/${PACKAGE_NAME}.desktop"
 echo -e "   • Data Directory: /var/lib/nexusrfid"
+echo -e "   • Network Config: /etc/netplan/99-nexusrfid-eth0.yaml (or /etc/network/interfaces.d/nexusrfid-eth0)"
+echo -e "   • eth0 configured: 169.254.0.1/16 (for RFID reader connection)"
 echo ""
 echo -e "${PURPLE}Service Management:${NC}"
 echo -e "   • Start: ${WHITE}sudo systemctl start nexusrfid_production.service${NC}"

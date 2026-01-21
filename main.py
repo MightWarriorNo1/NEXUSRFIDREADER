@@ -77,19 +77,46 @@ if __name__ == "__main__":
 
     sys.excepthook = exception_hook
 
-    # Run network initialization command before app starts
+    # Run network initialization and interface priority reordering
     try:
         if platform.system() == "Linux":
+            # Step 1: Activate cellular interface
             result = subprocess.run(["sudo", "-n", "dhclient", "usb0"], capture_output=True, text=True, timeout=20)
             logger.info(f"Executed 'sudo dhclient usb0' (rc={result.returncode})")
             if result.stdout:
                 logger.info(result.stdout.strip())
             if result.stderr:
                 logger.warning(result.stderr.strip())
+            
+            # Wait a moment for the interface to settle after dhclient
+            time.sleep(2)
+            
+            # Step 2: Verify interfaces and reorder priorities
+            from utils.network import reorder_interface_priorities, get_current_active_interface
+            
+            logger.info("Starting network interface verification and priority reordering...")
+            success, prev_priorities, updated_priorities, current_interface = reorder_interface_priorities()
+            
+            if success and current_interface:
+                # Store current interface for overview screen
+                import utils.network
+                utils.network.CURRENT_INTERFACE = current_interface
+                logger.info(f"Network interface setup complete. Active interface: {current_interface['interface']} ({current_interface['type']})")
+            else:
+                # Fallback: try to get current interface without reordering
+                current_interface = get_current_active_interface()
+                if current_interface:
+                    import utils.network
+                    utils.network.CURRENT_INTERFACE = current_interface
+                    logger.info(f"Using current interface: {current_interface['interface']} ({current_interface['type']})")
+                else:
+                    logger.warning("Could not determine current network interface")
         else:
-            logger.info("Skipping 'sudo dhclient usb0' (non-Linux platform)")
+            logger.info("Skipping network interface setup (non-Linux platform)")
     except Exception as e:
-        logger.error(f"Error executing 'sudo dhclient usb0': {e}")
+        logger.error(f"Error during network interface setup: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
 
     # Enable GPS on startup
     try:
