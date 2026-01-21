@@ -7,17 +7,20 @@
     <x>0</x>
     <y>0</y>
     <width>800</width>
-    <height>560</height>
+    <height>480</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>NexusRFIDReader</string>
   </property>
+  <property name="styleSheet">
+   <string notr="true">background-color: #e6e6e6;</string>
+  </property>
   <widget class="QWidget" name="centralwidget">
    <property name="minimumSize">
     <size>
      <width>800</width>
-     <height>540</height>
+     <height>480</height>
     </size>
    </property>
    <property name="maximumSize">
@@ -27,9 +30,7 @@
     </size>
    </property>
    <property name="styleSheet">
-    <string notr="true">#centralwidget{
-background-color: #808080;
-}</string>
+    <string notr="true"/>
    </property>
    <layout class="QVBoxLayout" name="verticalLayout">
     <property name="spacing">
@@ -47,139 +48,6 @@ background-color: #808080;
     <property name="bottomMargin">
      <number>5</number>
     </property>
-    <item>
-     <widget class="QWidget" name="header" native="true">
-      <property name="minimumSize">
-       <size>
-        <width>0</width>
-        <height>50</height>
-       </size>
-      </property>
-      <property name="maximumSize">
-       <size>
-        <width>16777215</width>
-        <height>60</height>
-       </size>
-      </property>
-      <property name="styleSheet">
-       <string notr="true">#header {
-  background-color: #808080;
-  border-top-right-radius: 3px;
-  border-top-left-radius: 3px;
-  border-bottom: 1px solid #FFFFFF;
-}</string>
-      </property>
-      <layout class="QHBoxLayout" name="horizontalLayout">
-       <property name="bottomMargin">
-        <number>0</number>
-       </property>
-       <item>
-        <widget class="QToolButton" name="btn_overview">
-         <property name="sizePolicy">
-          <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
-           <horstretch>0</horstretch>
-           <verstretch>0</verstretch>
-          </sizepolicy>
-         </property>
-         <property name="minimumSize">
-          <size>
-           <width>130</width>
-           <height>0</height>
-          </size>
-         </property>
-         <property name="font">
-          <font>
-           <family>Gilroy</family>
-           <pointsize>14</pointsize>
-          </font>
-         </property>
-         <property name="styleSheet">
-          <string notr="true">color: #FFFFFF;
-background-color: #595959;
-border-top-right-radius: 5px;
-border-top-left-radius: 5px;
-padding-left: 10px;</string>
-         </property>
-         <property name="text">
-          <string> Overview </string>
-         </property>
-         <property name="icon">
-          <iconset resource="pl.qrc">
-           <normaloff>:/img/img/home.png</normaloff>:/img/img/home.png</iconset>
-         </property>
-         <property name="iconSize">
-          <size>
-           <width>24</width>
-           <height>24</height>
-          </size>
-         </property>
-         <property name="toolButtonStyle">
-          <enum>Qt::ToolButtonStyle::ToolButtonTextBesideIcon</enum>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QToolButton" name="btn_settings">
-         <property name="sizePolicy">
-          <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
-           <horstretch>0</horstretch>
-           <verstretch>0</verstretch>
-          </sizepolicy>
-         </property>
-         <property name="minimumSize">
-          <size>
-           <width>130</width>
-           <height>0</height>
-          </size>
-         </property>
-         <property name="font">
-          <font>
-           <family>Gilroy</family>
-           <pointsize>14</pointsize>
-          </font>
-         </property>
-         <property name="styleSheet">
-          <string notr="true">color: #FFFFFF;
-border: none;
-border-top-right-radius: 3px;
-border-top-left-radius: 3px;
-background-color: #707070;
-padding-left: 18px;</string>
-         </property>
-         <property name="text">
-          <string>Settings</string>
-         </property>
-         <property name="icon">
-          <iconset resource="pl.qrc">
-           <normaloff>:/img/img/gear-48.png</normaloff>:/img/img/gear-48.png</iconset>
-         </property>
-         <property name="iconSize">
-          <size>
-           <width>24</width>
-           <height>24</height>
-          </size>
-         </property>
-         <property name="toolButtonStyle">
-          <enum>Qt::ToolButtonStyle::ToolButtonTextBesideIcon</enum>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <spacer name="horizontalSpacer">
-         <property name="orientation">
-          <enum>Qt::Orientation::Horizontal</enum>
-         </property>
-         <property name="sizeHint" stdset="0">
-          <size>
-           <width>181</width>
-           <height>20</height>
-          </size>
-         </property>
-        </spacer>
-       </item>
-      </layout>
-     </widget>
-    </item>
     <item>
      <widget class="QStackedWidget" name="stack">
       <property name="styleSheet">

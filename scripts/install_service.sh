@@ -40,9 +40,7 @@ print_step() {
 SERVICE_NAME="nexusrfid"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
-# Get the actual user's home directory (not derived from project path)
-SERVICE_USER="${SUDO_USER:-$(whoami)}"
-HOME_DIR="$(eval echo ~${SERVICE_USER})"
+HOME_DIR="$(cd -- "${PROJECT_ROOT}/.." && pwd)"
 RUN_SCRIPT="${PROJECT_ROOT}/scripts/run_app.sh"
 UNIT_PATH="/etc/systemd/system/${SERVICE_NAME}.service"
 
@@ -94,7 +92,7 @@ ExecStartPre=/bin/sleep 5
 ExecStart=${RUN_SCRIPT}
 Restart=always
 RestartSec=5
-User=${SERVICE_USER}
+User=${SUDO_USER:-$(whoami)}
 Environment=PYTHONUNBUFFERED=1
 Environment=DISPLAY=:0
 Environment=XAUTHORITY=${HOME_DIR}/.Xauthority
