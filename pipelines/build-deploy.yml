@@ -641,39 +641,18 @@ stages:
                     scriptType: bash
                     scriptLocation: inlineScript
                     inlineScript: |
-                      set -eo pipefail
+                      set -euo pipefail
                       SA="${{ format(variables.storageAccountName, 'test') }}"
                       CN="deviceupdates"
+                      SAS="$(rfidstoragesasRW)"
                       BUILD="$(Build.BuildNumber)"
                       P="$(projectName)"
-                      
-                      # Get SAS token - temporarily disable exit on error to check variable
-                      set +e
-                      SAS_VALUE="$(rfidstoragesasRW)"
-                      SAS_CHECK=$?
-                      set -e
-                      
-                      # Validate SAS token variable exists and is set
-                      if [ $SAS_CHECK -ne 0 ] || [ -z "$SAS_VALUE" ] || [ "$SAS_VALUE" = "\$(rfidstoragesasRW)" ]; then
-                        echo "##[error]=========================================="
-                        echo "##[error]rfidstoragesasRW variable is MISSING or NOT SET"
-                        echo "##[error]=========================================="
-                        echo "##[error]The variable 'rfidstoragesasRW' must exist in one of these variable groups:"
-                        echo "##[error]  - test-variables"
-                        echo "##[error]  - test-keyvault-secrets"
-                        echo "##[error]"
-                        echo "##[error]Please add the variable to the appropriate variable group."
-                        echo "##[error]This variable should contain the SAS token for the storage account."
-                        exit 1
-                      fi
-                      SAS="$SAS_VALUE"
                       
                       echo "=== Debug Information ==="
                       echo "Storage Account: $SA"
                       echo "Container: $CN"
                       echo "Build Number: $BUILD"
                       echo "Project Name: $P"
-                      echo "SAS Token: ${SAS:0:20}..." # Show first 20 chars for debugging
                       echo ""
                       
                       # Debug: List contents of downloaded directories

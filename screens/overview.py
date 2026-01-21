@@ -9,14 +9,15 @@ from utils.gps import GPS
 from utils.common import extract_from_gps, get_date_from_utc, pre_config_gps, find_gps_port, get_processor_id, enable_gps_at_command
 from utils.data_storage import DataStorage
 from utils.api_client import ApiClient
+from utils.network import CURRENT_INTERFACE, get_current_active_interface
 from widgets.waiting_spinner import QtWaitingSpinner
 import settings
 from settings import API_CONFIG, FILTER_CONFIG, DATABASE_CONFIG, reload_config
 import time
 import subprocess
 import platform
+import sqlite3
 from ping3 import ping
-from utils_Test.internet_status import detect_active_tunnels
 
 
 class GPSScannerThread(QThread):
@@ -154,8 +155,7 @@ class OverviewScreen(BaseScreen):
         self._check_internet_status()  # Initial check
         
         # Initialize internet tunnel status
-        self.ui.internet_tunnel.setText("N/A")
-        self._update_internet_tunnel_status()  # Initial check
+        self._update_internet_tunnel_display()
         
         # Internet disconnection tracking
         self.internet_disconnected_start = None
@@ -165,9 +165,15 @@ class OverviewScreen(BaseScreen):
         self.config_reload_timer = QTimer(self)
         self.config_reload_timer.timeout.connect(self._reload_config_and_update)
         self._start_config_reload_timer()
+        
+        # Flag to track if screen is being destroyed/left
+        self._is_leaving = False
 
     def on_leave(self):
         logger.info("Leaving overview screen - stopping all threads and timers immediately")
+        
+        # Set flag to prevent any new storage operations
+        self._is_leaving = True
         
         # Disconnect all signal connections first to prevent callbacks from firing
         try:
@@ -266,26 +272,6 @@ class OverviewScreen(BaseScreen):
         self.ui.internet_status.setStyleSheet("""color: #00ff00;""" if ok else """color: #ff0000;""")
         self.ui.internet_status.setText(text)
     
-    def _update_internet_tunnel_status(self):
-        """Update internet tunnel status display"""
-        try:
-            tunnels = detect_active_tunnels()
-            if not tunnels:
-                tunnel_text = "Nothing"
-            else:
-                tunnel_text = " and ".join(sorted(tunnels))
-            self.ui.internet_tunnel.setText(tunnel_text)
-        except subprocess.TimeoutExpired:
-            # Ping timeout - interface likely doesn't have internet
-            logger.debug("Internet tunnel detection timed out")
-            # Keep current value or set to "N/A" if not set
-            if not self.ui.internet_tunnel.text() or self.ui.internet_tunnel.text() == "":
-                self.ui.internet_tunnel.setText("N/A")
-        except Exception as e:
-            logger.debug(f"Error detecting internet tunnels: {e}")
-            # Keep current value or set to "N/A" if not set
-            if not self.ui.internet_tunnel.text() or self.ui.internet_tunnel.text() == "":
-                self.ui.internet_tunnel.setText("N/A")
 
     def _on_gps_status(self, status):
         # Called by external GPS worker
@@ -334,6 +320,10 @@ class OverviewScreen(BaseScreen):
             self.waiting_label.resize(label_width, label_height)
 
     def _on_rfid_status(self, status):
+        # Check if we're leaving - if so, ignore all RFID signals
+        if self._is_leaving:
+            return
+        
         # logger.debug(f"RFID status received: {status}")
         if status == 1:
             self.ui.rfid_connection_status.setStyleSheet("""color: #00ff00;""")
@@ -419,35 +409,46 @@ class OverviewScreen(BaseScreen):
                     pass
                 else:
                     # Values are different, proceed with storage
+                    # Check if storage is still valid before using it
+                    if self._is_leaving or not self.storage:
+                        return
+                    
                     if self.storage.use_db:
+                        # Check if database connection is still valid
+                        if not self.storage.db_connection or not self.storage.db_cursor:
+                            logger.debug("Database connection closed, skipping storage")
+                            return
+                        
                         # Prevent duplicates within configured time window
                         duplicate_window_seconds = DATABASE_CONFIG.get('duplicate_detection_seconds', 3)
                         duplicate_window_microseconds = duplicate_window_seconds * 1_000_000
-                        assert self.storage.db_cursor
-                        self.storage.db_cursor.execute('''
-                            SELECT * FROM records
-                            WHERE rfidTag = ?
-                            AND (
-                                ABS(timestamp - ?) < ?
-                                OR (latitude = ? AND longitude = ?)
-                            )
-                        ''', (tag['EPC-96'], tag['LastSeenTimestampUTC'], duplicate_window_microseconds, lat, lon))
-                        rows = self.storage.db_cursor.fetchall()
-                        if not rows:
-                            # Prepare record list with explicit id
-                            assert self.storage.db_cursor
-                            self.storage.db_cursor.execute('SELECT id FROM records ORDER BY id ASC')
-                            used_ids = self.storage.db_cursor.fetchall()
-                            rec = [
-                                calculate_next_id(used_ids), tag['EPC-96'], f"{tag['AntennaID']}", f"{tag['PeakRSSI']}",
-                                lat, lon, speed, bearing, "-", self.api.user_name, tag['LastSeenTimestampUTC'],
-                                "", "", "", "", "", "", "", ""
-                            ]
-                            self.storage.add_record(rec)
-                            # Update last stored values after successful storage
-                            self.last_stored_rfid = current_rfid
-                            self.last_stored_lat = current_lat
-                            self.last_stored_lon = current_lon
+                        try:
+                            self.storage.db_cursor.execute('''
+                                SELECT * FROM records
+                                WHERE rfidTag = ?
+                                AND (
+                                    ABS(timestamp - ?) < ?
+                                    OR (latitude = ? AND longitude = ?)
+                                )
+                            ''', (tag['EPC-96'], tag['LastSeenTimestampUTC'], duplicate_window_microseconds, lat, lon))
+                            rows = self.storage.db_cursor.fetchall()
+                            if not rows:
+                                # Prepare record list with explicit id
+                                self.storage.db_cursor.execute('SELECT id FROM records ORDER BY id ASC')
+                                used_ids = self.storage.db_cursor.fetchall()
+                                rec = [
+                                    calculate_next_id(used_ids), tag['EPC-96'], f"{tag['AntennaID']}", f"{tag['PeakRSSI']}",
+                                    lat, lon, speed, bearing, "-", self.api.user_name, tag['LastSeenTimestampUTC'],
+                                    "", "", "", "", "", "", "", ""
+                                ]
+                                self.storage.add_record(rec)
+                                # Update last stored values after successful storage
+                                self.last_stored_rfid = current_rfid
+                                self.last_stored_lat = current_lat
+                                self.last_stored_lon = current_lon
+                        except (sqlite3.ProgrammingError, AttributeError) as e:
+                            logger.debug(f"Database operation failed (possibly closed): {e}")
+                            return
                     else:
                         new_data = [True, tag['EPC-96'], f"{tag['AntennaID']}", f"{tag['PeakRSSI']}",
                                     lat, lon, speed, bearing, "-", self.api.user_name, tag['LastSeenTimestampUTC'],
@@ -569,6 +570,26 @@ class OverviewScreen(BaseScreen):
                     self.ui.last_gps_read.setText(f"{lat:.7f}, {lon:.7f}")
                     self.ui.last_gps_time.setText(get_date_from_utc(gps_timestamp))
 
+    def _update_internet_tunnel_display(self):
+        """Update the internet tunnel display with current active interface."""
+        try:
+            # First try to get from global variable set during startup
+            current_interface = CURRENT_INTERFACE
+            
+            # If not available, try to get current interface
+            if not current_interface:
+                current_interface = get_current_active_interface()
+            
+            if current_interface:
+                interface_name = current_interface['interface']
+                interface_type = current_interface['type']
+                self.ui.internet_tunnel.setText(f"{interface_name} ({interface_type})")
+            else:
+                self.ui.internet_tunnel.setText("N/A")
+        except Exception as e:
+            logger.debug(f"Error updating internet tunnel display: {e}")
+            self.ui.internet_tunnel.setText("N/A")
+
     def _check_internet_status(self):
         """Check internet connectivity by pinging Google DNS"""
         try:
@@ -586,9 +607,6 @@ class OverviewScreen(BaseScreen):
             self._set_internet_status("Disconnected", False)
             logger.debug(f"Internet ping error: {e}")
             self._handle_internet_disconnection()
-        
-        # Update tunnel status
-        self._update_internet_tunnel_status()
 
     def _handle_internet_disconnection(self):
         """Handle internet disconnection and check if restart is needed"""
@@ -675,7 +693,21 @@ class OverviewScreen(BaseScreen):
             logger.error("Failed to reload configuration, using existing values")
 
     def _upload_records(self):
-        data = self.storage.fetch_all_records()
+        # Check if we're leaving or storage is invalid
+        if self._is_leaving or not self.storage:
+            return
+        
+        # Check if database connection is still valid (if using database)
+        if self.storage.use_db:
+            if not self.storage.db_connection or not self.storage.db_cursor:
+                return
+        
+        try:
+            data = self.storage.fetch_all_records()
+        except (sqlite3.ProgrammingError, AttributeError) as e:
+            logger.debug(f"Failed to fetch records (possibly closed): {e}")
+            return
+        
         if not data:
             return
         
@@ -740,16 +772,25 @@ class OverviewScreen(BaseScreen):
             # Upload this batch
             if payload and self.api.upload_records(payload):
                 # Delete the successfully uploaded records
-                self.storage.delete_uploaded_records(uploaded_record_ids)
-                logger.debug(f"Successfully uploaded batch {batch_number + 1} with {len(uploaded_record_ids)} record(s)")
-                batch_number += 1
+                try:
+                    if not self._is_leaving and self.storage:
+                        self.storage.delete_uploaded_records(uploaded_record_ids)
+                    logger.debug(f"Successfully uploaded batch {batch_number + 1} with {len(uploaded_record_ids)} record(s)")
+                    batch_number += 1
+                except (sqlite3.ProgrammingError, AttributeError) as e:
+                    logger.debug(f"Failed to delete uploaded records (possibly closed): {e}")
+                    break
             else:
                 # Upload failed, stop processing remaining batches
                 logger.warning(f"Failed to upload batch {batch_number + 1}, stopping batch processing")
                 break
         
         # Also do best-effort pruning for any old records
-        self.storage.prune_old()
+        if not self._is_leaving and self.storage:
+            try:
+                self.storage.prune_old()
+            except (sqlite3.ProgrammingError, AttributeError) as e:
+                logger.debug(f"Failed to prune old records (possibly closed): {e}")
 
 
 def calculate_next_id(used_ids):
