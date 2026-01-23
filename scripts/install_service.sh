@@ -40,9 +40,7 @@ print_step() {
 SERVICE_NAME="nexusrfid"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
-# Get the actual user's home directory (not derived from project path)
-SERVICE_USER="${SUDO_USER:-$(whoami)}"
-HOME_DIR="$(eval echo ~${SERVICE_USER})"
+HOME_DIR="$(cd -- "${PROJECT_ROOT}/.." && pwd)"
 RUN_SCRIPT="${PROJECT_ROOT}/scripts/run_app.sh"
 UNIT_PATH="/etc/systemd/system/${SERVICE_NAME}.service"
 
@@ -67,81 +65,6 @@ print_success "systemd detected"
 print_step "Creating systemd directory..."
 sudo install -d -m 755 /etc/systemd/system
 print_success "systemd directory ready"
-
-# Configure eth0 network interface for RFID reader connection
-print_step "Configuring eth0 network interface for RFID reader..."
-ETH0_IP="169.254.0.1"
-ETH0_NETMASK="255.255.0.0"
-ETH0_BROADCAST="169.254.255.255"
-
-# Check if eth0 interface exists
-if ip link show eth0 &>/dev/null 2>&1 || ifconfig eth0 &>/dev/null 2>&1; then
-    print_status "eth0 interface detected"
-    
-    # Configure eth0 immediately using ip command (preferred)
-    if command -v ip &>/dev/null; then
-        print_status "Configuring eth0 using ip command..."
-        sudo ip addr flush dev eth0 2>/dev/null || true
-        sudo ip addr add ${ETH0_IP}/16 broadcast ${ETH0_BROADCAST} dev eth0 2>/dev/null || true
-        sudo ip link set eth0 up 2>/dev/null || true
-        print_success "eth0 configured with IP: ${ETH0_IP}"
-    # Fallback to ifconfig
-    elif command -v ifconfig &>/dev/null; then
-        print_status "Configuring eth0 using ifconfig command..."
-        sudo ifconfig eth0 ${ETH0_IP} netmask ${ETH0_NETMASK} broadcast ${ETH0_BROADCAST} up 2>/dev/null || true
-        print_success "eth0 configured with IP: ${ETH0_IP}"
-    fi
-    
-    # Configure persistent network settings
-    # Try netplan first (Ubuntu 18.04+)
-    if [ -d "/etc/netplan" ]; then
-        print_status "Creating netplan configuration for persistent eth0 settings..."
-        sudo bash -c "cat > /etc/netplan/99-nexusrfid-eth0.yaml" <<NETPLAN
-# Network configuration for Nexus RFID Reader eth0 interface
-# Auto-configured during service installation
-network:
-  version: 2
-  renderer: networkd
-  ethernets:
-    eth0:
-      addresses:
-        - ${ETH0_IP}/16
-      dhcp4: false
-      dhcp6: false
-NETPLAN
-        
-        # Validate and apply netplan config
-        if command -v netplan &>/dev/null; then
-            sudo netplan try --timeout 2 &>/dev/null || sudo netplan apply 2>/dev/null || true
-            print_success "Netplan configuration applied"
-        fi
-    # Fallback to traditional /etc/network/interfaces
-    else
-        print_status "Creating traditional interfaces configuration for persistent eth0 settings..."
-        sudo install -d -m 755 /etc/network/interfaces.d
-        sudo bash -c "cat > /etc/network/interfaces.d/nexusrfid-eth0" <<INTERFACES
-# Network configuration for Nexus RFID Reader eth0 interface
-# Auto-configured during service installation
-auto eth0
-iface eth0 inet static
-    address ${ETH0_IP}
-    netmask ${ETH0_NETMASK}
-    broadcast ${ETH0_BROADCAST}
-INTERFACES
-        print_success "Interfaces configuration created"
-    fi
-    
-    # Verify configuration
-    sleep 1
-    if ip addr show eth0 2>/dev/null | grep -q "${ETH0_IP}" || ifconfig eth0 2>/dev/null | grep -q "${ETH0_IP}"; then
-        print_success "eth0 successfully configured with IP: ${ETH0_IP}"
-    else
-        print_warning "eth0 configuration may not have taken effect. Please verify manually with: ip addr show eth0"
-    fi
-else
-    print_warning "eth0 interface not found. Configuration will be applied when interface becomes available."
-    print_status "Persistent configuration files have been created for future use."
-fi
 
 print_step "Checking run script permissions..."
 if [ ! -x "${RUN_SCRIPT}" ]; then
@@ -169,7 +92,7 @@ ExecStartPre=/bin/sleep 5
 ExecStart=${RUN_SCRIPT}
 Restart=always
 RestartSec=5
-User=${SERVICE_USER}
+User=${SUDO_USER:-$(whoami)}
 Environment=PYTHONUNBUFFERED=1
 Environment=DISPLAY=:0
 Environment=XAUTHORITY=${HOME_DIR}/.Xauthority

@@ -52,10 +52,6 @@ def get_default_config():
         "api_config": {
             "login_url": "",
             "health_url": "",
-            # "auth0_url": "https://auth.nexusyms.com/oauth/token",
-            # "record_url": "https://apim-prod-spotlight.azure-api.net/nexus-locate/api/sites/019a020f-8c9a-71df-a735-a75b49d1012d/scans",
-            # "client_id": "enc:NLtB_hyxb6WI9y_XmoT8YTmdyki9GB5mlLPaML8rl78=",
-            # "client_secret": "enc:NrwV_TLDea6o0UXjrWWbOX6c2oekR3CVGZ4MXNWRjb2QG3QpkXlinPWzN-Jxkbik3LSwmDWbEcZKT2ft10iTGg==",
             "auth0_url": "https://test-auth.nexusyms.com/oauth/token",
             "record_url": "https://apim-test-spotlight.azure-api.net/nexus-locate/api/sites/0198c311-4801-7445-b73a-3a7dce72c6f6/scans",
             "client_id": "enc:Fos_8S--ZaKf0ArsuHXISz607BcGkpBejboEKtkmh7k=",
@@ -66,11 +62,9 @@ def get_default_config():
             "token": "",
             "user_name": "NexusUser",
             "spotter_id": "120",
-            # "site_id": "019a020f-8c9a-71df-a735-a75b49d1012d",
             "site_id": "019a9e1e-81ff-75ab-99fc-4115bb92fec6",
             "record_interval_ms": 7000,
             "health_interval_ms": 15000,
-            "max_upload_records": 10,
         },
         "database_config": {
             "use_db": True,
@@ -80,8 +74,8 @@ def get_default_config():
         "filter_config": {
             "speed": {
                 "enabled": True,
-                "min": 1,
-                "max": 20,
+                "min": 0,
+                "max": 15,
             },
             "rssi": {
                 "enabled": False,

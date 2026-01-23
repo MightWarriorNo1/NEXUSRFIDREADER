@@ -28,14 +28,14 @@ class ApiEndpointTester:
     """Comprehensive API endpoint tester"""
     
     def __init__(self):
+        # self.auth0_url = "https://dev-0m8cx6xlg7z8zy6j.us.auth0.com/oauth/token"
+        # self.client_id = "dC1zM4ghLvr8eipSOlmRhAelHRXdtvNC"
+        # self.client_secret = "M__OTtIL7Pw754RBKIEEOCrXsxTef61vWny57keAXqwNN6mvylhg5Yc4XNtajqk4"
+        # self.record_url = "http://test-api-locate.nexusyms.com/api/sites/0198c311-4801-7445-b73a-3a7dce72c6f6/scans"
         self.auth0_url = "https://test-auth.nexusyms.com/oauth/token"
         self.client_id = "pBwSiPtKmklfuqgZ7KUE05GPYkmySNiT"
         self.client_secret = "C2AOzwrW1HxJ4t1gAUa8tdvZnhomVINUNDzj6hLtPxK_KTq5JIt4pHRMgl2m3-dd"
         self.record_url = "https://apim-test-spotlight.azure-api.net/nexus-locate/api/sites/0198c311-4801-7445-b73a-3a7dce72c6f6/scans"
-        # self.auth0_url = "https://auth.nexusyms.com/oauth/token"
-        # self.client_id = "RruFZEBNzBIKWn340d7tkK5XPPGcMIyn"
-        # self.client_secret = "PsYGlWXwZdW_xAPLwcG5Rzgi-Ou7W3oPOKoKPylCGTqyhSr1hZuXSV1R_q817dA_"
-        # self.record_url = "https://apim-prod-spotlight.azure-api.net/nexus-locate/api/sites/019a020f-8c9a-71df-a735-a75b49d1012d/scans"
         self.audience = "https://nexus-locate-api"
         self.health_url = API_CONFIG.get('health_url')
         self.user_name = API_CONFIG.get('user_name', 'TestUser')

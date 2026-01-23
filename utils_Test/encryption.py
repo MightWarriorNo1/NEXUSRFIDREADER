@@ -1,7 +1,6 @@
 import os
 import sys
 import base64
-import argparse
 
 
 def _ensure_repo_root_on_path():
@@ -39,7 +38,7 @@ def encrypt(plaintext: str) -> str:
     return "enc:" + base64.urlsafe_b64encode(bytes(out)).decode("utf-8")
 
 
-def run_checks(client_id=None, client_secret=None):
+def run_checks():
     client = ApiClient()
 
     cases = [
@@ -70,48 +69,33 @@ def run_checks(client_id=None, client_secret=None):
     print("All encryption/decryption checks passed.")
 
     # 3) Detailed step-by-step for provided credentials
-    if client_id or client_secret:
-        provided_values = {}
-        if client_id:
-            provided_values["client_id"] = client_id
-        if client_secret:
-            provided_values["client_secret"] = client_secret
+    # provided_values = {
+    #     "client_id": "dC1zM4ghLvr8eipSOlmRhAelHRXdtvNC",
+    #     "client_secret": "M__OTtIL7Pw754RBKIEEOCrXsxTef61vWny57keAXqwNN6mvylhg5Yc4XNtajqk4",
+    # }
+    provided_values = {
+        "client_id": "pBwSiPtKmklfuqgZ7KUE05GPYkmySNiT",
+        "client_secret": "C2AOzwrW1HxJ4t1gAUa8tdvZnhomVINUNDzj6hLtPxK_KTq5JIt4pHRMgl2m3-dd",
+    }
 
-        for label, plain in provided_values.items():
-            print("\n==== STEP-BY-STEP:", label, "====")
-            print("PLAINTEXT:", plain)
-            enc = encrypt(plain)
-            print("ENCRYPTED (with prefix):", enc)
-            b64_payload = enc[len("enc:"):]
-            print("BASE64 PAYLOAD:", b64_payload)
-            payload_bytes = base64.urlsafe_b64decode(b64_payload.encode("utf-8"))
-            print("PAYLOAD BYTES (hex):", payload_bytes.hex())
-            dec = client._decrypt_config_value(enc)
-            print("DECRYPTED:", dec)
-            ok = (dec == plain)
-            print("MATCHES ORIGINAL:", ok)
-            if not ok:
-                raise AssertionError(f"Decryption mismatch for {label}")
+    for label, plain in provided_values.items():
+        print("\n==== STEP-BY-STEP:", label, "====")
+        print("PLAINTEXT:", plain)
+        enc = encrypt(plain)
+        print("ENCRYPTED (with prefix):", enc)
+        b64_payload = enc[len("enc:"):]
+        print("BASE64 PAYLOAD:", b64_payload)
+        payload_bytes = base64.urlsafe_b64decode(b64_payload.encode("utf-8"))
+        print("PAYLOAD BYTES (hex):", payload_bytes.hex())
+        dec = client._decrypt_config_value(enc)
+        print("DECRYPTED:", dec)
+        ok = (dec == plain)
+        print("MATCHES ORIGINAL:", ok)
+        if not ok:
+            raise AssertionError(f"Decryption mismatch for {label}")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Encrypt client_id and client_secret values for configuration"
-    )
-    parser.add_argument(
-        "--client-id",
-        type=str,
-        help="Client ID to encrypt",
-        default=None
-    )
-    parser.add_argument(
-        "--client-secret",
-        type=str,
-        help="Client secret to encrypt",
-        default=None
-    )
-    args = parser.parse_args()
-    
-    run_checks(client_id=args.client_id, client_secret=args.client_secret)
+    run_checks()
 
 

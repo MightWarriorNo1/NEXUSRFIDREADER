@@ -49,8 +49,6 @@ class DataStorage:
     def close(self):
         if self.db_connection:
             self.db_connection.close()
-            self.db_connection = None
-            self.db_cursor = None
 
     def add_record(self, record_list):
         if self.use_db:

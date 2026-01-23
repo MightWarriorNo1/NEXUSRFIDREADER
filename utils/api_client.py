@@ -37,7 +37,7 @@ class ApiClient:
     def update_config(self):
         """Update config values when configuration is reloaded"""
         self._update_config_values()
-        # logger.debug("API client config values updated")
+        logger.debug("API client config values updated")
 
     def _session(self):
         retry_strategy = Retry(total=1, backoff_factor=1, status_forcelist=[429, 500, 502, 503, 504], allowed_methods=["HEAD", "GET", "OPTIONS", "POST"])  # type: ignore
